@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+
+if ! command -v mpv &>/dev/null; then
+	echo "Error: mpv is not installed. Please install it before running this script."
+	exit 1
+fi
+
+# should work unless the link has been changed/ended/taken down...
+declare -A urls=(
+	["study"]="https://youtu.be/jfKfPfyJRdk"
+	["chill"]="https://youtu.be/rUxyKA_-grg"
+	["game"]="https://youtu.be/MVPTGNGiI-4"
+	["fcc"]="https://coderadio-relay-ffm.freecodecamp.org/radio/8010/radio.mp3"
+)
+
+hour=$(date +%H)
+# auto play if there's no arg provided based on time of the day
+if ((hour >= 22 && hour < 6)); then
+	url=${urls["chill"]}
+elif ((hour >= 6 && hour < 12)); then
+	url=${urls["study"]}
+elif ((hour >= 18 && hour < 22)); then
+	url=${urls["game"]}
+else
+	url=${urls["fcc"]}
+fi
+
+usage() {
+	cat <<EOF
+Usage: $(basename "$0") [OPTIONS]
+
+Play/Stream lofi music audio, and nothing else
+                          - Amberol (probably)
+
+Options:
+  -s, --study      Play lofi radio beats to relax/study music.
+  -c, --chill      Play lofi radio beats sleeps/chill music.
+  -g, --game       Play lofi synthwave radio beats to chill/game music.
+  -f, --fcc        Play freeCodeCamp Code Radio.
+  -r, --random     Play a random station url.
+  -h, --help       Display this help message.
+EOF
+}
+
+main() {
+	while [[ $# -gt 0 ]]; do
+		case $1 in
+		-s | --study)
+			url=${urls["study"]}
+			shift
+			;;
+		-c | --chill)
+			url=${urls["chill"]}
+			shift
+			;;
+		-g | --game)
+			url=${urls["game"]}
+			shift
+			;;
+		-f | --fcc)
+			url=${urls["fcc"]}
+			shift
+			;;
+		-r | --random)
+			url=${urls[$(shuf -n 1 -e "${!urls[@]}")]}
+			shift
+			;;
+		-h | --help)
+			usage
+			exit 0
+			;;
+		*)
+			echo "Unknown option: $1" >&2
+			usage
+			exit 1
+			;;
+		esac
+	done
+
+	mpv --no-video "$url"
+}
+
+main "$@" || main "$url"
