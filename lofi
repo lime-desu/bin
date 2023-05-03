@@ -13,18 +13,6 @@ declare -A urls=(
 	["fcc"]="https://coderadio-relay-ffm.freecodecamp.org/radio/8010/radio.mp3"
 )
 
-hour=$(date +%H)
-# auto play if there's no arg provided based on time of the day
-if ((hour >= 22 && hour < 6)); then
-	url=${urls["chill"]}
-elif ((hour >= 6 && hour < 12)); then
-	url=${urls["study"]}
-elif ((hour >= 18 && hour < 22)); then
-	url=${urls["game"]}
-else
-	url=${urls["fcc"]}
-fi
-
 usage() {
 	cat <<EOF
 Usage: $(basename "$0") [OPTIONS]
@@ -37,47 +25,72 @@ Options:
   -c, --chill      Play lofi radio beats sleeps/chill music.
   -g, --game       Play lofi synthwave radio beats to chill/game music.
   -f, --fcc        Play freeCodeCamp Code Radio.
-  -r, --random     Play a random station url.
+  -r, --random     Play a random station url (study, chilll, game, fcc).
+  -v, --video      Play with video (default: none, no video for fcc).
   -h, --help       Display this help message.
 EOF
 }
 
 main() {
-	while [[ $# -gt 0 ]]; do
-		case $1 in
-		-s | --study)
-			url=${urls["study"]}
-			shift
-			;;
-		-c | --chill)
+	local url
+	local video=false
+	# auto play if there's no arg provided based on time of the day
+	if [[ $# -eq 0 ]]; then
+		hour=$(date +%_H)
+		if ((hour >= 22 && hour < 6)); then
 			url=${urls["chill"]}
-			shift
-			;;
-		-g | --game)
+		elif ((hour >= 6 && hour < 12)); then
+			url=${urls["study"]}
+		elif ((hour >= 18 && hour < 22)); then
 			url=${urls["game"]}
-			shift
-			;;
-		-f | --fcc)
+		else
 			url=${urls["fcc"]}
-			shift
-			;;
-		-r | --random)
-			url=${urls[$(shuf -n 1 -e "${!urls[@]}")]}
-			shift
-			;;
-		-h | --help)
-			usage
-			exit 0
-			;;
-		*)
-			echo "Unknown option: $1" >&2
-			usage
-			exit 1
-			;;
-		esac
-	done
+		fi
+	else
+		while [[ $# -gt 0 ]]; do
+			case $1 in
+			-s | --study | study)
+				url=${urls["study"]}
+				shift
+				;;
+			-c | --chill | chill)
+				url=${urls["chill"]}
+				shift
+				;;
+			-g | --game | game)
+				url=${urls["game"]}
+				shift
+				;;
+			-f | --fcc | fcc)
+				url=${urls["fcc"]}
+				shift
+				;;
+			-r | --random)
+				url=${urls[$(shuf -n 1 -e "${!urls[@]}")]}
+				shift
+				;;
+			-v | --video)
+				video=true
+				shift
+				;;
+			-h | --help)
+				usage
+				exit 0
+				;;
+			*)
+				echo "Unknown option: $1" >&2
+				usage
+				exit 1
+				;;
+			esac
+		done
+	fi
 
-	mpv --no-video "$url"
+	if $video; then
+		mpv "$url"
+	else
+		mpv --no-video "$url"
+	fi
 }
 
-main "$@" || main "$url"
+main "$@"
