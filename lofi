@@ -13,6 +13,13 @@ declare -A urls=(
 	["fcc"]="https://coderadio-relay-ffm.freecodecamp.org/radio/8010/radio.mp3"
 )
 
+declare -A messages=(
+	["study"]="Playing lofi hip hop radio - beats to relax/study to"
+	["chill"]="Playing lofi hip hop radio - beats to sleep/chill to"
+	["game"]="Playing synthwave radio - beats to chill/game to"
+	["fcc"]="Playing freeCodeCamp code Radio"
+)
+
 usage() {
 	cat <<EOF
 Usage: $(basename "$0") [OPTIONS]
@@ -39,34 +46,43 @@ main() {
 		hour=$(date +%_H)
 		if ((hour >= 22 && hour < 6)); then
 			url=${urls["chill"]}
+			station_name="chill"
 		elif ((hour >= 6 && hour < 12)); then
 			url=${urls["study"]}
+			station_name="study"
 		elif ((hour >= 18 && hour < 22)); then
 			url=${urls["game"]}
+			station_name="game"
 		else
 			url=${urls["fcc"]}
+			station_name="fcc"
 		fi
 	else
 		while [[ $# -gt 0 ]]; do
 			case $1 in
 			-s | --study | study)
 				url=${urls["study"]}
+				station_name="study"
 				shift
 				;;
 			-c | --chill | chill)
 				url=${urls["chill"]}
+				station_name="chill"
 				shift
 				;;
 			-g | --game | game)
 				url=${urls["game"]}
+				station_name="game"
 				shift
 				;;
 			-f | --fcc | fcc)
 				url=${urls["fcc"]}
+				station_name="fcc"
 				shift
 				;;
 			-r | --random)
-				url=${urls[$(shuf -n 1 -e "${!urls[@]}")]}
+				station_name=$(shuf -n 1 -e "${!urls[@]}")
+				url=${urls[$station_name]}
 				shift
 				;;
 			-v | --video)
@@ -85,6 +101,8 @@ main() {
 			esac
 		done
 	fi
+
+	echo "${messages[$station_name]}..."
 
 	if $video; then
 		mpv "$url"
