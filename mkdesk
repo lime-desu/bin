@@ -7,6 +7,14 @@ comments=""
 desktop_dir="$HOME/.local/share/applications"
 desktop_files=("$desktop_dir"/*.desktop)
 
+list_desktop_files() {
+	local i=1
+	for desktop_file in "${desktop_files[@]}"; do
+		echo "$i. ${desktop_file##*/}"
+		((i++))
+	done
+}
+
 get_app_name() {
 	while true; do
 		read -rp "Enter the name of the application: " app_name
@@ -102,6 +110,8 @@ Usage: $(basename "$0") [OPTIONS] APP_NAME
 Create a desktop file for an application.
 
 OPTIONS:
+  -l, --list)    List the available desktop files 
+                 (from: $desktop_dir)
   -e, --edit     Edit an existing desktop file.
   -r, --rename   Rename desktop application
   -d, --delete   Delete desktop application
@@ -115,6 +125,7 @@ while [[ $# -gt 0 ]]; do
 	key="$1"
 	case $key in
 	-h | --help) show_help && exit 0 ;;
+	-l | --list) list_desktop_files && exit 0 ;;
 	-e | --edit) edit_desktop_file && exit 0 ;;
 	-d | --delete) delete_desktop_file && exit 0 ;;
 	-r | --rename) rename_desktop_file && exit 0 ;;
