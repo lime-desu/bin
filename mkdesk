@@ -9,6 +9,7 @@ desktop_files=("$desktop_dir"/*.desktop)
 
 list_desktop_files() {
 	local i=1
+	echo "Desktop file lists:"
 	for desktop_file in "${desktop_files[@]}"; do
 		echo "$i. ${desktop_file##*/}"
 		((i++))
@@ -39,7 +40,7 @@ validate_command() {
 	fi
 }
 
-get_icon_path() { read -rp "Enter the path to the icon (blank for default): " icon_path; }
+get_icon_path() { read -rp "Enter the path to the icon (blank for none): " icon_path; }
 
 validate_icon_path() {
 	if [ -n "$icon_path" ] && [ ! -f "$icon_path" ]; then
@@ -52,21 +53,39 @@ validate_icon_path() {
 get_comments() { read -rp "Enter additional comments to include (blank for none): " comments; }
 
 get_desktop_file_selection() {
-	echo "Select a desktop file:"
-	# strip only the file name
-	select desktop_file in "${desktop_files[@]##*/}"; do
-		if [[ -n "$desktop_file" ]]; then
-			break
-		else
-			echo "Invalid selection. Please try again."
-		fi
-	done
+	local file_selection=$1
+	if [[ -z "$file_selection" ]]; then
+		# strip only the file name
+		select desktop_file in "${desktop_files[@]##*/}"; do
+			if [[ -n "$desktop_file" ]]; then
+				break
+			else
+				echo "Invalid selection. Please try again."
+			fi
+		done
+	else
+		desktop_file="${desktop_files[$file_selection - 1]##*/}"
+	fi
 }
 
-edit_desktop_file() { get_desktop_file_selection && ${VISUAL:-${EDITOR:-vim}} "$desktop_dir/$desktop_file"; }
-delete_desktop_file() { get_desktop_file_selection && rm -rv "${desktop_dir:?}/${desktop_file:?}"; }
+edit_desktop_file() {
+	local file_selection=$1
+	echo "Select a desktop file to be edited:"
+	get_desktop_file_selection "$file_selection"
+	${VISUAL:-${EDITOR:-vim}} "$desktop_dir/$desktop_file"
+}
+
+delete_desktop_file() {
+	local file_selection=$1
+	echo "Select a desktop file to be deleted:"
+	get_desktop_file_selection "$file_selection"
+	rm -rv "${desktop_dir:?}/${desktop_file:?}"
+}
+
 rename_desktop_file() {
-	get_desktop_file_selection
+	local file_selection=$1
+	echo "Select a desktop file to be rename:"
+	get_desktop_file_selection "$file_selection"
 	read -rp "Enter the new name for the desktop file: " new_name
 	mv -v "${desktop_dir:?}/${desktop_file:?}" "${desktop_dir}/${new_name}.desktop"
 }
@@ -75,14 +94,8 @@ create_desktop_file() {
 	# Ensure it isn't empty
 	[[ -z $app_name ]] && get_app_name
 	[[ -z $comments ]] && get_comments
-	[[ -z $command ]] && {
-		get_command
-		validate_command
-	}
-	[[ -z $icon_path ]] && {
-		get_icon_path
-		validate_icon_path
-	}
+	[[ -z $command ]] && get_command && validate_command
+	[[ -z $icon_path ]] && get_icon_path && validate_icon_path
 
 	desktop_file="$desktop_dir/$app_name.desktop"
 	[ -d "$desktop_dir" ] || mkdir -p "$desktop_dir"
@@ -109,31 +122,35 @@ Usage: $(basename "$0") [OPTIONS] APP_NAME
 
 Create a desktop file for an application.
 
-OPTIONS:
-  -l, --list)    List the available desktop files 
-                 (from: $desktop_dir)
-  -e, --edit     Edit an existing desktop file.
-  -r, --rename   Rename desktop application
-  -d, --delete   Delete desktop application
-  -h, --help     Show this help message and exit.
+APP_NAME                    The name of the application.
 
-APP_NAME         The name of the application.
+OPTIONS:
+  -l, --list)               List the available desktop files 
+                            (located in: $desktop_dir)
+  -e, --edit [NUMBER]       Edit an existing desktop file based on its number in the list.
+  -r, --rename [NUMBER]     Rename desktop application based on its number in the list.
+  -d, --delete [NUMBER]     Delete desktop application based on its number in the list.
+  -h, --help                Show this help message and exit.
+
+  [NUMBER] is optional, If not provided, a selection menu will appear.
+
 EOF
 }
 
 while [[ $# -gt 0 ]]; do
 	key="$1"
 	case $key in
-	-h | --help) show_help && exit 0 ;;
 	-l | --list) list_desktop_files && exit 0 ;;
-	-e | --edit) edit_desktop_file && exit 0 ;;
-	-d | --delete) delete_desktop_file && exit 0 ;;
-	-r | --rename) rename_desktop_file && exit 0 ;;
+	-e | --edit) edit_desktop_file "$2" && exit 0 ;;
+	-d | --delete) delete_desktop_file "$2" && exit 0 ;;
+	-r | --rename) rename_desktop_file "$2" && exit 0 ;;
+	-h | --help) show_help && exit 0 ;;
 	*)
 		app_name="$1"
 		shift
 		;;
 	esac
+	shift
 done
 
 create_desktop_file
