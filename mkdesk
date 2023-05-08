@@ -8,11 +8,9 @@ desktop_dir="$HOME/.local/share/applications"
 desktop_files=("$desktop_dir"/*.desktop)
 
 list_desktop_files() {
-	local i=1
 	echo "Desktop file lists:"
-	for desktop_file in "${desktop_files[@]}"; do
-		echo "$i. ${desktop_file##*/}"
-		((i++))
+	for ((i = 0; i < ${#desktop_files[@]}; i++)); do
+		echo "$((i + 1)). ${desktop_files[i]##*/}"
 	done
 }
 
@@ -70,24 +68,34 @@ get_desktop_file_selection() {
 
 edit_desktop_file() {
 	local file_selection=$1
-	echo "Select a desktop file to be edited:"
+	[[ -z $file_selection ]] && echo "Select a desktop file to be edited:" || check_num
 	get_desktop_file_selection "$file_selection"
 	${VISUAL:-${EDITOR:-vim}} "$desktop_dir/$desktop_file"
 }
 
-delete_desktop_file() {
-	local file_selection=$1
-	echo "Select a desktop file to be deleted:"
-	get_desktop_file_selection "$file_selection"
-	rm -rv "${desktop_dir:?}/${desktop_file:?}"
-}
-
 rename_desktop_file() {
 	local file_selection=$1
-	echo "Select a desktop file to be rename:"
+	local new_name=$2
+	[[ -z $file_selection ]] && echo "Select a desktop file to be rename:" || check_num
 	get_desktop_file_selection "$file_selection"
-	read -rp "Enter the new name for the desktop file: " new_name
+	[[ -z $new_name ]] && read -rp "Enter the new name for the desktop file: " new_name || check_name
 	mv -v "${desktop_dir:?}/${desktop_file:?}" "${desktop_dir}/${new_name}.desktop"
+}
+
+copy_desktop_file() {
+	local file_selection=$1
+	local new_name=$2
+	[[ -z $file_selection ]] && echo "Select a desktop file to be copied:" || check_num
+	get_desktop_file_selection "$file_selection"
+	[[ -z $new_name ]] && read -rp "Enter a name for the copied desktop file: " new_name || check_name
+	cp -v "${desktop_dir:?}/${desktop_file:?}" "${desktop_dir}/${new_name}.desktop"
+}
+
+delete_desktop_file() {
+	local file_selection=$1
+	[[ -z $file_selection ]] && echo "Select a desktop file to be deleted:" || check_num
+	get_desktop_file_selection "$file_selection"
+	rm -rv "${desktop_dir:?}/${desktop_file:?}"
 }
 
 create_desktop_file() {
@@ -117,40 +125,56 @@ EOF
 }
 
 show_help() {
-	cat <<EOF
-Usage: $(basename "$0") [OPTIONS] APP_NAME
+	cat <<-EOF
+		Usage: $(basename "$0") [OPTIONS] <APP_NAME>
 
-Create a desktop file for an application.
+		Create a desktop file for an application.
 
-APP_NAME                    The name of the application.
+		<APP_NAME>                    The name of the desktop application.
 
-OPTIONS:
-  -l, --list)               List the available desktop files 
-                            (located in: $desktop_dir)
-  -e, --edit [NUMBER]       Edit an existing desktop file based on its number in the list.
-  -r, --rename [NUMBER]     Rename desktop application based on its number in the list.
-  -d, --delete [NUMBER]     Delete desktop application based on its number in the list.
-  -h, --help                Show this help message and exit.
+		OPTIONS:
+		  -l, --list)                 List the available desktop files 
+		                              (located in: $desktop_dir)
+		  -e, --edit [NUM]            Edit an existing desktop file based on its number in the list.
+		  -r, --rename [NUM] [NAME]   Rename desktop application based on its number in the list.
+		  -c, --copy [NUM] [NAME]     Make a copy of desktop application based on its number in the list.
+		  -d, --delete [NUM]          Delete desktop application based on its number in the list.
 
-  [NUMBER] is optional, If not provided, a selection menu will appear.
+		  -h, --help                  Show this help message and exit.
 
-EOF
+		  If [NUM]/[NAME] is not provided, a selection/prompt menu will appear.
+
+	EOF
 }
 
-while [[ $# -gt 0 ]]; do
-	key="$1"
-	case $key in
-	-l | --list) list_desktop_files && exit 0 ;;
-	-e | --edit) edit_desktop_file "$2" && exit 0 ;;
-	-d | --delete) delete_desktop_file "$2" && exit 0 ;;
-	-r | --rename) rename_desktop_file "$2" && exit 0 ;;
-	-h | --help) show_help && exit 0 ;;
-	*)
-		app_name="$1"
+main() {
+	number="$2"
+	name="$3"
+	check_num() { [[ ! $number =~ ^[0-9]+$ ]] && echo "Error: Please specify a number from the list." && exit; }
+	check_name() { [[ -z $name ]] && echo "Error: Please provide a name it shouldn't be empty." && exit; }
+	[[ $# -eq 0 ]] && create_desktop_file
+	while [[ $# -gt 0 ]]; do
+		key="$1"
+		case $key in
+		-l | --list) list_desktop_files ;;
+		-e | --edit) edit_desktop_file "$number" ;;
+		-r | --rename) rename_desktop_file "$number" "${name:-}" ;;
+		-c | --copy) copy_desktop_file "$number" "${name:-}" ;;
+		-d | --delete) delete_desktop_file "$number" ;;
+		-h | --help) show_help ;;
+		*)
+			if [[ ${key:0:1} == "-" ]]; then
+				echo "Invalid option: $key"
+				show_help
+			else
+				app_name=$1
+				[[ -z $number && -z $name ]] && create_desktop_file
+			fi
+			shift
+			;;
+		esac
 		shift
-		;;
-	esac
-	shift
-done
+	done
+}
 
-create_desktop_file
+main "$@"
