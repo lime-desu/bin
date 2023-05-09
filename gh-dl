@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+
+GH_API="https://api.github.com"
+DL_PATH="${GHDL_PATH:-$HOME/Downloads/gh-dl}"
+
+command_exist() { command -v "$1" >/dev/null 2>&1; }
+for dep in fzf jq curl; do command_exist "$dep" || {
+	echo "Error: $dep is not installed." >&2
+	exit 1
+}; done
+
+usage() {
+	cat <<EOF >&2
+Usage: $(basename "$0") [Options] <username>/<reponame>
+
+Options:
+  -a, --all        List all the releases (default: latest version)
+  -d, --directory  Download path (default: $DL_PATH)
+  -h, --help       Show this help message
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+	-a | --all)
+		all_assets=true
+		shift
+		;;
+	-d | --directory)
+		directory="$2"
+		[[ -z "$directory" ]] && echo "Error: Directory not specified." >&2 && exit 1
+		[[ ! -d "$directory" ]] && echo "Error: Invalid directory path." >&2 && exit 1
+		shift 2
+		;;
+	-h | --help)
+		usage
+		exit 0
+		;;
+	-*)
+		echo "Error: Unknown option: $1" >&2
+		usage
+		exit 1
+		;;
+	*)
+		user_repo="$1"
+		shift
+		;;
+	esac
+done
+
+directory=${directory:-$DL_PATH}
+
+user_repo=${user_repo:-$(read -rp "Enter repository name: " && echo "$REPLY")}
+[[ "$user_repo" =~ ^[[:alnum:]-]+/[[:alnum:]-]+$ ]] || { echo "Error: Invalid format (must be: <username>/<reponame>)." >&2 && exit 1; }
+
+if [[ "$all_assets" = true ]]; then
+	assets=$(curl -s "${GH_API}/repos/${user_repo}/releases" | jq -r '.[].assets[] | [.name, .browser_download_url] | join(" -- ")')
+else
+	assets=$(curl -s "${GH_API}/repos/${user_repo}/releases/latest" | jq -r '.assets[] | [.name, .browser_download_url] | join(" -- ")')
+fi
+
+selected_asset=$(echo "$assets" | fzf --with-nth=1 --color=fg:bold:blue)
+
+if [[ -n "$selected_asset" ]]; then
+	url=$(echo "$selected_asset" | awk -F ' -- ' '{print $2}')
+	if command_exist aria2c; then
+		aria2c --dir="$directory" --file-allocation=none --continue "$url"
+	else
+		[[ -d "$directory" ]] || mkdir -p "$directory" && curl -L -o "$directory/$(basename "$url")" "$url"
+	fi
+fi
