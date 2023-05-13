@@ -6,6 +6,15 @@ img=$(curl -sL $URL | grep 'href= "https://imgs.xkcd.com/comics.*' |
 	cut -d'>' -f2 |
 	cut -d'<' -f1 | tr -d '\n')
 
+filename=${img##*/}
+title=${filename%.*}
+
+result=$(echo "${title//_/ }" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | tr '[:lower:]' '[:upper:]')
+width=$(tput cols)
+
+padding=$(((width - ${#result}) / 2))
+printf "%*s%s%*s\n" $padding "" "$(tput bold)$result$(tput sgr0)" $padding
+
 if [[ $TERM = "xterm-kitty" ]]; then
 	kitty +kitten icat "$img"
 else
