@@ -100,7 +100,7 @@ main() {
 	if $video; then
 		mpv "$url"
 	else
-		mpv --no-video "$url"
+		mpv --no-resume-playback --no-video "$url"
 	fi
 }
 
