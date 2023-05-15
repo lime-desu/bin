@@ -3,9 +3,20 @@
 GH_API="https://api.github.com"
 DL_PATH="${GHDL_PATH:-$HOME/Downloads/gh-dl}"
 
+message() {
+	local color
+	case "$1" in
+	blue) color=$(tput setaf 4 && tput bold) ;;
+	red) color=$(tput setaf 1 && tput bold) ;;
+	green) color=$(tput setaf 2 && tput bold) ;;
+	yellow) color=$(tput setaf 3 && tput bold) ;;
+	esac
+	printf "%s%s%s" "$color" "$2" "$(tput sgr0)"
+}
+
 command_exist() { command -v "$1" >/dev/null 2>&1; }
 for dep in fzf jq curl; do command_exist "$dep" || {
-	echo "Error: $dep is not installed." >&2
+	printf "%s\n" "$(message red "Error: $dep is not installed.")" >&2
 	exit 1
 }; done
 
@@ -20,6 +31,8 @@ Options:
 EOF
 }
 
+all_assets=false
+directory=${directory:-$DL_PATH}
 while [[ $# -gt 0 ]]; do
 	case "$1" in
 	-a | --all)
@@ -28,8 +41,8 @@ while [[ $# -gt 0 ]]; do
 		;;
 	-d | --directory)
 		directory="$2"
-		[[ -z "$directory" ]] && echo "Error: Directory not specified." >&2 && exit 1
-		[[ ! -d "$directory" ]] && echo "Error: Invalid directory path." >&2 && exit 1
+		[[ -z "$directory" ]] && { printf "%s\n" "$(message yellow "Error: Directory not specified.")" >&2 && exit 1; }
+		[[ ! -d "$directory" ]] && { printf "%s\n" "$(message red "Error: Invalid directory path.")" >&2 && exit 1; }
 		shift 2
 		;;
 	-h | --help)
@@ -37,35 +50,43 @@ while [[ $# -gt 0 ]]; do
 		exit 0
 		;;
 	-*)
-		echo "Error: Unknown option: $1" >&2
+		printf "%s\n" "$(message red "Error: Unknown option: $1")" >&2
 		usage
 		exit 1
 		;;
 	*)
-		user_repo="$1"
+		query_repo="$1"
 		shift
 		;;
 	esac
 done
 
-directory=${directory:-$DL_PATH}
+search_repo() {
+	local query_encoded="${1//' '/'%20'}"
+	search_result=$(curl -s ${GH_API}/search/repositories?q="$query_encoded" | jq -r '.items[] | .full_name')
+	[[ -z "$search_result" ]] && { printf "%s\n" "$(message red "No results found. Search and try again.")" && exit; }
+	query_repo=$(echo "$search_result" | fzf --color=fg:bold:blue --prompt="Select repository: > ")
+	[[ -z "$query_repo" ]] && exit
+}
 
-user_repo=${user_repo:-$(read -rp "Enter repository name: " && echo "$REPLY")}
-[[ "$user_repo" =~ ^[[:alnum:]-]+/[[:alnum:]-]+$ ]] || { echo "Error: Invalid format (must be: <username>/<reponame>)." >&2 && exit 1; }
+query_repo=${query_repo:-$(read -rp "$(message blue "Search repository: ")" && echo "$REPLY")}
+[[ "$query_repo" =~ ^[[:alnum:]-]+/[[:alnum:]-]+$ ]] || { search_repo "$query_repo"; }
 
 if [[ "$all_assets" = true ]]; then
-	assets=$(curl -s "${GH_API}/repos/${user_repo}/releases" | jq -r '.[].assets[] | [.name, .browser_download_url] | join(" -- ")')
+	assets=$(curl -s "${GH_API}/repos/${query_repo}/releases" | jq -r '.[].assets[] | [.name, .browser_download_url] | join(" -- ")')
 else
-	assets=$(curl -s "${GH_API}/repos/${user_repo}/releases/latest" | jq -r '.assets[] | [.name, .browser_download_url] | join(" -- ")')
+	assets=$(curl -s "${GH_API}/repos/${query_repo}/releases/latest" | jq -r '.assets[] | [.name, .browser_download_url] | join(" -- ")')
 fi
+[[ -z "$assets" ]] && { printf "%s\n" "$(message yellow "No releases found for this repository: \"${query_repo}\"")" && exit; }
 
-selected_asset=$(echo "$assets" | fzf --with-nth=1 --color=fg:bold:blue)
+selected_asset=$(echo "$assets" | fzf --with-nth=1 --color=fg:bold:blue --prompt="Select what to download: > ")
+[[ -z "$selected_asset" ]] && exit
 
-if [[ -n "$selected_asset" ]]; then
-	url=$(echo "$selected_asset" | awk -F ' -- ' '{print $2}')
-	if command_exist aria2c; then
-		aria2c --dir="$directory" --file-allocation=none --continue "$url"
-	else
-		[[ -d "$directory" ]] || mkdir -p "$directory" && curl -L -o "$directory/$(basename "$url")" "$url"
-	fi
+url=$(echo "$selected_asset" | awk -F ' -- ' '{print $2}')
+filename=$(echo "$selected_asset" | awk -F ' -- ' '{print $1}')
+printf "%s\n" "$(message green "Downloading ${filename}...")"
+if command_exist aria2c; then
+	aria2c --dir="$directory" --file-allocation=none --continue "$url"
+else
+	[[ -d "$directory" ]] || mkdir -p "$directory" && curl -L -o "$directory/$(basename "$url")" "$url"
 fi
