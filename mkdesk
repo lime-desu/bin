@@ -7,8 +7,19 @@ comments=""
 desktop_dir="$HOME/.local/share/applications"
 desktop_files=("$desktop_dir"/*.desktop)
 
+message() {
+	local color
+	case "$1" in
+	blue) color=$(tput setaf 4 && tput bold) ;;
+	red) color=$(tput setaf 1 && tput bold) ;;
+	green) color=$(tput setaf 2 && tput bold) ;;
+	yellow) color=$(tput setaf 3 && tput bold) ;;
+	esac
+	printf "%s%s%s\n" "$color" "$2" "$(tput sgr0)"
+}
+
 list_desktop_files() {
-	echo "Desktop file lists:"
+	message "blue" "Desktop file lists:"
 	for ((i = 0; i < ${#desktop_files[@]}; i++)); do
 		echo "$((i + 1)). ${desktop_files[i]##*/}"
 	done
@@ -16,39 +27,39 @@ list_desktop_files() {
 
 get_app_name() {
 	while true; do
-		read -rp "Enter the name of the application: " app_name
+		read -rp "$(message "blue" "Enter the name of the application: ")" app_name
 		[ -z "$app_name" ] || break
-		echo "Error: desktop name cannot be empty. Please try again."
+		message "red" "Error: desktop name cannot be empty. Please try again."
 	done
 }
 
 get_command() {
 	while true; do
-		read -rp "Command to execute: " command
+		read -rp "$(message "blue" "Command to execute: ")" command
 		[ -z "$command" ] || break
-		echo "Error: command cannot be empty. Please try again."
+		message "red" "Error: command cannot be empty. Please try again."
 	done
 }
 
 validate_command() {
 	if ! command -v "$command" >/dev/null; then
-		echo "Error: $command is not a valid command."
+		message "red" "Error: $command is not a valid command."
 		get_command
 		validate_command
 	fi
 }
 
-get_icon_path() { read -rp "Enter the path to the icon (blank for none): " icon_path; }
+get_icon_path() { read -rp "$(message "blue" "Enter the path to the icon $(message "yellow" "(blank for none):") ")" icon_path; }
 
 validate_icon_path() {
 	if [ -n "$icon_path" ] && [ ! -f "$icon_path" ]; then
-		echo "Error: $icon_path is not a valid icon/image file path."
+		message "red" "Error: $icon_path is not a valid icon/image file path."
 		get_icon_path
 		validate_icon_path
 	fi
 }
 
-get_comments() { read -rp "Enter additional comments to include (blank for none): " comments; }
+get_comments() { read -rp "$(message "blue" "Enter additional comments to include $(message "yellow" "(blank for none):") ")" comments; }
 
 get_desktop_file_selection() {
 	local file_selection=$1
@@ -58,7 +69,7 @@ get_desktop_file_selection() {
 			if [[ -n "$desktop_file" ]]; then
 				break
 			else
-				echo "Invalid selection. Please try again."
+				message "red" "Invalid selection. Please try again."
 			fi
 		done
 	else
@@ -68,7 +79,7 @@ get_desktop_file_selection() {
 
 edit_desktop_file() {
 	local file_selection=$1
-	[[ -z $file_selection ]] && echo "Select a desktop file to be edited:" || check_num
+	[[ -z $file_selection ]] && message "blue" "Select a desktop file to be edited:" || check_num
 	get_desktop_file_selection "$file_selection"
 	${VISUAL:-${EDITOR:-vim}} "$desktop_dir/$desktop_file"
 }
@@ -76,7 +87,7 @@ edit_desktop_file() {
 rename_desktop_file() {
 	local file_selection=$1
 	local new_name=$2
-	[[ -z $file_selection ]] && echo "Select a desktop file to be rename:" || check_num
+	[[ -z $file_selection ]] && message "blue" "Select a desktop file to be rename:" || check_num
 	get_desktop_file_selection "$file_selection"
 	[[ -z $new_name ]] && read -rp "Enter the new name for the desktop file: " new_name || check_name
 	mv -v "${desktop_dir:?}/${desktop_file:?}" "${desktop_dir}/${new_name}.desktop"
@@ -85,15 +96,15 @@ rename_desktop_file() {
 copy_desktop_file() {
 	local file_selection=$1
 	local new_name=$2
-	[[ -z $file_selection ]] && echo "Select a desktop file to be copied:" || check_num
+	[[ -z $file_selection ]] && message "blue" "Select a desktop file to be copied:" || check_num
 	get_desktop_file_selection "$file_selection"
-	[[ -z $new_name ]] && read -rp "Enter a name for the copied desktop file: " new_name || check_name
+	[[ -z $new_name ]] && read -rp "$(message "blue" "Enter a name for the copied desktop file: ")" new_name || check_name
 	cp -v "${desktop_dir:?}/${desktop_file:?}" "${desktop_dir}/${new_name}.desktop"
 }
 
 delete_desktop_file() {
 	local file_selection=$1
-	[[ -z $file_selection ]] && echo "Select a desktop file to be deleted:" || check_num
+	[[ -z $file_selection ]] && message "blue" "Select a desktop file to be deleted:" || check_num
 	get_desktop_file_selection "$file_selection"
 	rm -rv "${desktop_dir:?}/${desktop_file:?}"
 }
@@ -118,31 +129,30 @@ Type=Application
 EOF
 
 	if [ -f "$desktop_file" ]; then
-		echo "Desktop entry created at $desktop_file"
+		message "blue" "Desktop entry created at $desktop_file"
 	else
-		echo "Error: Failed to create desktop entry."
+		message "red" "Error: Failed to create desktop entry."
 	fi
 }
 
 show_help() {
 	cat <<-EOF
-		Usage: $(basename "$0") [OPTIONS] <APP_NAME>
+		Usage: $(message "blue" "$(basename "$0")") [OPTIONS] $(message "blue" "<APP_NAME>")
 
-		Create a desktop file for an application.
+		$(message "green" "Create a desktop file for an application.")
 
-		<APP_NAME>                    The name of the desktop application.
+		$(message "blue" "<APP_NAME>")                  The name of the desktop application.
 
-		OPTIONS:
-		  -l, --list)                 List the available desktop files 
-		                              (located in: $desktop_dir)
-		  -e, --edit [NUM]            Edit an existing desktop file based on its number in the list.
-		  -r, --rename [NUM] [NAME]   Rename desktop application based on its number in the list.
-		  -c, --copy [NUM] [NAME]     Make a copy of desktop application based on its number in the list.
-		  -d, --delete [NUM]          Delete desktop application based on its number in the list.
+		$(message "green" "OPTIONS:")
+		$(message "yellow" "-l, --list)")                 List the available desktop files (located in: $desktop_dir)
+		$(message "yellow" "-e, --edit [NUM]")            Edit an existing desktop file based on its number in the list.
+		$(message "yellow" "-r, --rename [NUM] [NAME]")   Rename desktop application based on its number in the list.
+		$(message "yellow" "-c, --copy [NUM] [NAME]")     Make a copy of desktop application based on its number in the list.
+		$(message "yellow" "-d, --delete [NUM]")          Delete desktop application based on its number in the list.
 
-		  -h, --help                  Show this help message and exit.
+		$(message "yellow" "-h, --help")                  Show this help message and exit.
 
-		  If [NUM]/[NAME] is not provided, a selection/prompt menu will appear.
+		If [NUM]/[NAME] is not provided, a selection/prompt menu will appear.
 
 	EOF
 }
@@ -150,8 +160,8 @@ show_help() {
 main() {
 	number="$2"
 	name="$3"
-	check_num() { [[ ! $number =~ ^[0-9]+$ ]] && echo "Error: Please specify a number from the list." && exit; }
-	check_name() { [[ -z $name ]] && echo "Error: Please provide a name it shouldn't be empty." && exit; }
+	check_num() { [[ ! $number =~ ^[0-9]+$ ]] && message "red" "Error: Please specify a number from the list." && exit; }
+	check_name() { [[ -z $name ]] && messge "red" "Error: Please provide a name it shouldn't be empty." && exit; }
 	[[ $# -eq 0 ]] && create_desktop_file
 	while [[ $# -gt 0 ]]; do
 		key="$1"
@@ -164,7 +174,7 @@ main() {
 		-h | --help) show_help ;;
 		*)
 			if [[ ${key:0:1} == "-" ]]; then
-				echo "Invalid option: $key"
+				message "red" "Invalid option: $(message "green" "$key")"
 				show_help
 			else
 				app_name=$1
