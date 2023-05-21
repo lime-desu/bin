@@ -11,60 +11,52 @@ message() {
 	green) color=$(tput setaf 2 && tput bold) ;;
 	yellow) color=$(tput setaf 3 && tput bold) ;;
 	esac
-	printf "%s%s%s" "$color" "$2" "$(tput sgr0)"
+	printf "%s%s%s\n" "$color" "$2" "$(tput sgr0)"
 }
 
 command_exist() { command -v "$1" >/dev/null 2>&1; }
 for dep in fzf jq curl; do command_exist "$dep" || {
-	printf "%s\n" "$(message red "Error: $dep is not installed.")" >&2
+	message red "Error: $dep is not installed." >&2
 	exit 1
 }; done
 
 usage() {
 	cat <<EOF >&2
-Usage: $(basename "$0") [Options] <username>/<reponame>
+Usage: $(message "blue" "$(basename "$0")") [Options] $(message "blue" "<username>/<reponame>")
 
-Options:
-  -a, --all        List all the releases (default: latest version)
-  -d, --directory  Download path (default: $DL_PATH)
-  -h, --help       Show this help message
+$(message "green" "Options:")
+$(message "yellow" "-a, --all")             List all the releases (default: latest version)
+$(message "yellow" "-d, --directory")       Download path (default: $DL_PATH)
+$(message "yellow" "-h, --help")            Show this help message
 EOF
 }
+# TODO: --install flag?
 
 all_assets=false
 directory=${directory:-$DL_PATH}
 while [[ $# -gt 0 ]]; do
 	case "$1" in
-	-a | --all)
-		all_assets=true
-		shift
-		;;
+	-a | --all) all_assets=true && shift ;;
 	-d | --directory)
 		directory="$2"
-		[[ -z "$directory" ]] && { printf "%s\n" "$(message yellow "Error: Directory not specified.")" >&2 && exit 1; }
-		[[ ! -d "$directory" ]] && { printf "%s\n" "$(message red "Error: Invalid directory path.")" >&2 && exit 1; }
+		[[ -z "$directory" ]] && { message yellow "Error: Directory not specified." >&2 && exit 1; }
+		[[ ! -d "$directory" ]] && { message red "Error: Invalid directory path." >&2 && exit 1; }
 		shift 2
 		;;
-	-h | --help)
-		usage
-		exit 0
-		;;
+	-h | --help) usage && exit 0 ;;
 	-*)
-		printf "%s\n" "$(message red "Error: Unknown option: $1")" >&2
+		message red "Error: Unknown option: $1" >&2
 		usage
 		exit 1
 		;;
-	*)
-		query_repo="$1"
-		shift
-		;;
+	*) query_repo="$1" && shift ;;
 	esac
 done
 
 search_repo() {
 	local query_encoded="${1//' '/'%20'}"
 	search_result=$(curl -s ${GH_API}/search/repositories?q="$query_encoded" | jq -r '.items[] | .full_name')
-	[[ -z "$search_result" ]] && { printf "%s\n" "$(message red "No results found. Search and try again.")" && exit; }
+	[[ -z "$search_result" ]] && { message red "No results found. Search and try again." && exit; }
 	query_repo=$(echo "$search_result" | fzf --color=fg:bold:blue --prompt="Select repository: > ")
 	[[ -z "$query_repo" ]] && exit
 }
@@ -77,14 +69,14 @@ if [[ "$all_assets" = true ]]; then
 else
 	assets=$(curl -s "${GH_API}/repos/${query_repo}/releases/latest" | jq -r '.assets[] | [.name, .browser_download_url] | join(" -- ")')
 fi
-[[ -z "$assets" ]] && { printf "%s\n" "$(message yellow "No releases found for this repository: \"${query_repo}\"")" && exit; }
+[[ -z "$assets" ]] && { message yellow "No releases found for this repository: \"${query_repo}\"" && exit; }
 
 selected_asset=$(echo "$assets" | fzf --with-nth=1 --color=fg:bold:blue --prompt="Select what to download: > ")
 [[ -z "$selected_asset" ]] && exit
 
 url=$(echo "$selected_asset" | awk -F ' -- ' '{print $2}')
 filename=$(echo "$selected_asset" | awk -F ' -- ' '{print $1}')
-printf "%s\n" "$(message green "Downloading ${filename}...")"
+message green "Downloading ${filename}..."
 if command_exist aria2c; then
 	aria2c --dir="$directory" --file-allocation=none --continue "$url"
 else
