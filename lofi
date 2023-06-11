@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-set -x
 
 command -v mpv &>/dev/null || { echo "Error: mpv is not installed." && exit 1; }
 
@@ -80,6 +79,7 @@ main() {
 				shift
 				;;
 			-v | --video)
+				[[ $# -eq 1 ]] && { echo "Please specify a station name: relax or study, sleep or chill, game or synthwave" >&2 && exit 1; }
 				video=true
 				shift
 				;;
@@ -97,16 +97,9 @@ main() {
 	fi
 
 	echo "${messages[$station_name]}..."
-
 	mpv_command=(mpv --no-resume-playback)
-
-	if [[ "$video" ]]; then
-		mpv_command+=("$url")
-	else
-		mpv_command+=(--no-video "$url")
-	fi
+	[[ $video == true ]] && mpv_command+=("$url") || mpv_command+=(--no-video "$url")
 	[[ "$TERMUX_VERSION" ]] && mpv_command+=(--ao=pulse)
-
 	"${mpv_command[@]}"
 }
 

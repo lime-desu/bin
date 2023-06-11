@@ -26,18 +26,17 @@ Usage: $(message "blue" "$(basename "$0")") [Options] $(message "blue" "<usernam
 
 $(message "green" "Options:")
 $(message "yellow" "-a, --all")             List all the releases (default: latest version)
-$(message "yellow" "-d, --directory")       Download path (default: $DL_PATH)
+$(message "yellow" "-d, --output")          Download path directory (default: $DL_PATH)
 $(message "yellow" "-h, --help")            Show this help message
 EOF
 }
 # TODO: --install flag?
-
 all_assets=false
 directory=${directory:-$DL_PATH}
 while [[ $# -gt 0 ]]; do
 	case "$1" in
 	-a | --all) all_assets=true && shift ;;
-	-d | --directory)
+	-d | --output)
 		directory="$2"
 		[[ -z "$directory" ]] && { message yellow "Error: Directory not specified." >&2 && exit 1; }
 		[[ ! -d "$directory" ]] && { message red "Error: Invalid directory path." >&2 && exit 1; }
@@ -53,6 +52,8 @@ while [[ $# -gt 0 ]]; do
 	esac
 done
 
+# Main
+
 search_repo() {
 	local query_encoded="${1//' '/'%20'}"
 	search_result=$(curl -s ${GH_API}/search/repositories?q="$query_encoded" | jq -r '.items[] | .full_name')
@@ -64,11 +65,7 @@ search_repo() {
 query_repo=${query_repo:-$(read -rp "$(message blue "Search repository: ")" && echo "$REPLY")}
 [[ "$query_repo" =~ ^[[:alnum:]-]+/[[:alnum:]-]+$ ]] || { search_repo "$query_repo"; }
 
-if [[ "$all_assets" = true ]]; then
-	assets=$(curl -s "${GH_API}/repos/${query_repo}/releases" | jq -r '.[].assets[] | [.name, .browser_download_url] | join(" -- ")')
-else
-	assets=$(curl -s "${GH_API}/repos/${query_repo}/releases/latest" | jq -r '.assets[] | [.name, .browser_download_url] | join(" -- ")')
-fi
+assets=$(curl -s "${GH_API}/repos/${query_repo}/releases${all_assets:+?per_page=100}" | jq -r 'if '"$all_assets"' then .[].assets[] else (. | sort_by(.created_at) | reverse | .[0].assets[]) end | [.name, .browser_download_url] | join(" -- ")')
 [[ -z "$assets" ]] && { message yellow "No releases found for this repository: \"${query_repo}\"" && exit; }
 
 selected_asset=$(echo "$assets" | fzf --with-nth=1 --color=fg:bold:blue --prompt="Select what to download: > ")
@@ -80,5 +77,6 @@ message green "Downloading ${filename}..."
 if command_exist aria2c; then
 	aria2c --dir="$directory" --file-allocation=none --continue "$url"
 else
-	[[ -d "$directory" ]] || mkdir -p "$directory" && curl -L -o "$directory/$(basename "$url")" "$url"
+	[[ -d "$directory" ]] || mkdir -p "$directory"
+	curl -L -o "$directory/$(basename "$url")" "$url"
 fi
