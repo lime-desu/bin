@@ -1,0 +1,19 @@
+#!/bin/bash
+# Dependencies: tesseract gnome-screenshot wl-clipboard
+
+OCR=$(mktemp)
+
+gnome-screenshot -a -f "$OCR".png
+
+[[ ! -f "$OCR".png ]] && exit
+
+tesseract -l eng "$OCR".png "$OCR"
+
+if [[ -z $(cat "$OCR".txt) ]]; then
+	notify-send "No text was found."
+else
+	cat <"$OCR".txt | wl-copy
+	notify-send "Text copied" "$(cat "$OCR".txt)" -i edit-paste-symbolic
+fi
+
+exit
