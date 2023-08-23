@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
 
 GH_API="https://api.github.com"
-DL_PATH="${GHDL_PATH:-$HOME/Downloads/gh-dl}"
+if [ -n "$TERMUX_VERSION" ]; then
+	# setup termux storage first
+	# https://wiki.termux.com/wiki/Termux-setup-storage
+	DL_PATH="${GHDL_PATH:-$HOME/storage/downloads}"
+else
+	DL_PATH="${GHDL_PATH:-$HOME/Downloads/gh-dl}"
+fi
 
 message() {
 	local color
