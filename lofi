@@ -6,7 +6,7 @@ command -v mpv &>/dev/null || { echo "Error: mpv is not installed." && exit 1; }
 declare -A urls=(
 	["study"]="https://youtu.be/jfKfPfyJRdk"
 	["chill"]="https://youtu.be/rUxyKA_-grg"
-	["game"]="https://youtu.be/MVPTGNGiI-4"
+	["game"]="https://youtu.be/4xDzrJKXOOY"
 	["fcc"]="https://coderadio-admin-v2.freecodecamp.org/listen/coderadio/radio.mp3"
 )
 
