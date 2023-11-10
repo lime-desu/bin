@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+
+DEVICE_IP="192.168.1.193"
+
+# Trying to connect with the default port
+adb connect "$DEVICE_IP:5555" || {
+	# If unsuccessful, attempt to connect using dynamic port
+	dynamic_port=$(nmap "$DEVICE_IP" -p 37000-44000 | awk -F"/" '/\/tcp/ {print $1}')
+	if [[ -n "$dynamic_port" ]]; then
+		adb connect "$DEVICE_IP:$dynamic_port" || exit 1
+	fi
+}
+
+scrcpy_flags=(
+	"--window-borderless"
+	"--turn-screen-off"
+	"--show-touches"
+	"--kill-adb-on-close"
+)
+
+if adb devices | grep -q "$DEVICE_IP"; then
+	scrcpy "${scrcpy_flags[@]}" || { echo "Error: scrcpy is not installed" && exit 1; }
+	# adb disconnect
+else
+	echo "Enable Wireless Debugging first and try again" && exit 1
+fi
