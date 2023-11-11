@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+
 if [ "$(uname -s)" == "Linux" ]; then
 	NF_LS_DIR="$HOME/.cache/fzf/nf-ls"
 elif [ "$(uname -s)" == "Darwin" ]; then
@@ -6,11 +7,14 @@ elif [ "$(uname -s)" == "Darwin" ]; then
 fi
 
 get_nf_cheat_sheets() {
-	echo -ne "$(
-		curl -s https://www.nerdfonts.com/cheat-sheet |
-			grep -o '<div class="class-name">.*</div>' |
-			sed -e 's/<div class="class-name">\(.*\)<\/div><div title="Copy Hex Code to Clipboard" class="codepoint">\(.*\)<\/div>/\\u\2\tnf-\1/'
-	)"
+	glyphs=$(curl -s https://www.nerdfonts.com/cheat-sheet | awk '/const glyphs/,/}/' | sed '1d;$d;s/^[[:space:]]*//; s/"//g; s/,//g;')
+
+	#Convert the glyphs code into icon
+	while IFS=' ' read -r key code; do
+		icon_code="\u$code"              # Create the Unicode string separately
+		icon=$(printf "%b" "$icon_code") # Use printf with the -b option to interpret backslash escapes
+		echo "$key: $icon"
+	done <<<"$glyphs"
 }
 
 update_nf-ls_cache() {
@@ -23,7 +27,7 @@ if [ ! -d "$NF_LS_DIR" ]; then
 	update_nf-ls_cache
 fi
 
-awk '{sub("nf-nf-", "", $2); print $1 "  --  " $2}' "$NF_LS_DIR"/nf-ls-cheat.sh | column -t |
+awk -F'::' '{print $2 "  --  " $1}' "$NF_LS_DIR"/nf-ls-cheat.sh | column -t |
 	fzf -m \
 		--header "Nerd Font Cheat.sh" \
 		--bind "enter:execute(wl-copy {+1}; notify-send 'Nerd Font Cheat.sh' '{+1} {+3} - icon has been copied')" \
