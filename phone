@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 
-DEVICE_IP="192.168.1.193"
+arp -a | awk '{gsub(/[()]/, ""); print NR ".", $1 " - " $2}' | column -t
+read -rp "Choose device number: " choice
 
-# Trying to connect with the default port
-adb connect "$DEVICE_IP:5555" || {
-	# If unsuccessful, attempt to connect using dynamic port
-	dynamic_port=$(nmap "$DEVICE_IP" -p 37000-44000 | awk -F"/" '/\/tcp/ {print $1}')
-	if [[ -n "$dynamic_port" ]]; then
-		adb connect "$DEVICE_IP:$dynamic_port" || exit 1
-	fi
-}
+DEVICE_IP=$(arp -a | awk -v c="$choice" 'NR==c {gsub(/[()]/, ""); print $2}')
+
+dynamic_port=$(nmap "$DEVICE_IP" -p 37000-44000 | awk -F"/" '/\/tcp/ {print $1}')
+if [[ -n "$dynamic_port" ]]; then
+	adb connect "$DEVICE_IP:$dynamic_port"
+else
+	adb connect "$DEVICE_IP:5555"
+fi
 
 scrcpy_flags=(
 	"--window-borderless"
