@@ -1,27 +1,67 @@
 #!/usr/bin/env bash
 
-arp -a | awk '{gsub(/[()]/, ""); print NR ".", $1 " - " $2}' | column -t
-read -rp "Choose device number: " choice
+# set -eux
+choose_device() {
+	devices=$(arp -a | awk '{gsub(/[()]/, ""); print NR ".", $1 " - " $2}' | column -t)
 
-DEVICE_IP=$(arp -a | awk -v c="$choice" 'NR==c {gsub(/[()]/, ""); print $2}')
+	if command -v fzf &>/dev/null; then
+		# fzf ver. 38 above required
+		fzf_choice=$(echo "$devices" | fzf --header='Select Device:' --nth=2.. --bind 'enter:become(echo '\{-1\}')')
+	else
+		read -rp "$devices
+Choose from device number: " choice
+		read_choice=$(arp -a | awk -v c="$choice" 'NR==c {gsub(/[()]/, ""); print $2}')
+	fi
 
-dynamic_port=$(nmap "$DEVICE_IP" -p 37000-44000 | awk -F"/" '/\/tcp/ {print $1}')
-if [[ -n "$dynamic_port" ]]; then
-	adb connect "$DEVICE_IP:$dynamic_port"
-else
-	adb connect "$DEVICE_IP:5555"
-fi
+	echo "${fzf_choice:-$read_choice}" | tee /tmp/device.ip
+}
 
-scrcpy_flags=(
-	"--window-borderless"
-	"--turn-screen-off"
-	"--show-touches"
-	"--kill-adb-on-close"
-)
+get_device_ip() { [[ -f /tmp/device.ip ]] && cat /tmp/device.ip || choose_device; }
 
-if adb devices | grep -q "$DEVICE_IP"; then
-	scrcpy "${scrcpy_flags[@]}" || { echo "Error: scrcpy is not installed" && exit 1; }
-	# adb disconnect
-else
-	echo "Enable Wireless Debugging first and try again" && exit 1
-fi
+print_help() {
+	cat <<EOF
+Usage: $0 [-c|--change [IP]] [-h|--help]
+  -c, --change [IP]   Change the device (optional: provide IP address)
+  -h, --help          Display this help message
+EOF
+}
+
+main() {
+	while [[ $# -gt 0 ]]; do
+		case "$1" in
+		-c | --change)
+			shift
+			[[ -n "$1" ]] && echo "$1" >/tmp/device.ip || choose_device
+			exit 0
+			;;
+		-h | --help)
+			print_help
+			;;
+		*)
+			echo "Invalid option: $1"
+			;;
+		esac
+	done
+
+	DEVICE_IP=$(get_device_ip)
+
+	dynamic_port=$(nmap "$DEVICE_IP" -p 37000-44000 | awk -F"/" '/\/tcp/ {print $1}')
+	adb_port="${dynamic_port:-5555}"
+	adb connect "$DEVICE_IP:$adb_port"
+
+	scrcpy_flags=(
+		"--window-borderless"
+		"--turn-screen-off"
+		"--show-touches"
+		"--kill-adb-on-close"
+	)
+
+	if adb devices | grep -q "$DEVICE_IP"; then
+		scrcpy "${scrcpy_flags[@]}" || { echo "Error: scrcpy is not installed" && exit 1; }
+		# adb disconnect
+	else
+		echo "Enable Wireless Debugging first and try again" && exit 1
+	fi
+}
+
+main "$@"
