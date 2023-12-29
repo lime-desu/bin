@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+
+# set -eux
+conservation_mode_file="/sys/bus/platform/drivers/ideapad_acpi/VPC2004:00/conservation_mode"
+display_usage() { echo -e "Ideapad Battery Conservation Mode\nUsage: $(basename "$0") [status|on|off]"; }
+[[ "$#" -ne 1 ]] && { display_usage && exit 1; }
+
+case "$1" in
+"status")
+	status=$(cat "$conservation_mode_file")
+	[[ "$status" -eq 1 ]] && echo "on" || echo "off"
+	;;
+"on")
+	echo 1 | sudo tee "$conservation_mode_file" >/dev/null
+	;;
+"off")
+	echo 0 | sudo tee "$conservation_mode_file" >/dev/null
+	;;
+*)
+	display_usage
+	;;
+esac
+
+exit 0
