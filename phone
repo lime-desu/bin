@@ -1,11 +1,17 @@
 #!/usr/bin/env bash
 
-# set -eux
+set -e
+command -v scrcpy >/dev/null 2>&1 || { echo >&2 "Error: scrcpy is not installed" && exit 1; }
+has_fzf() { command -v fzf &>/dev/null; } # fzf v38 above required
+
+BASE_NAME=$(basename "$0")
+TMP_DEV_IP="/tmp/${BASE_NAME}_device.ip"
+TMP_DEV_PORT="/tmp/${BASE_NAME}_device.port"
+
 choose_device() {
 	devices=$(arp -a | awk '{gsub(/[()]/, ""); print NR ".", $1 " - " $2}' | column -t)
 
-	if command -v fzf &>/dev/null; then
-		# fzf ver. 38 above required
+	if has_fzf; then
 		fzf_choice=$(echo "$devices" | fzf --header='Select Device:' --nth=2.. --bind 'enter:become(echo '\{-1\}')')
 	else
 		read -rp "$devices
@@ -13,55 +19,88 @@ Choose from device number: " choice
 		read_choice=$(arp -a | awk -v c="$choice" 'NR==c {gsub(/[()]/, ""); print $2}')
 	fi
 
-	echo "${fzf_choice:-$read_choice}" | tee /tmp/device.ip
+	echo "${fzf_choice:-$read_choice}" | tee "$TMP_DEV_IP"
 }
 
-get_device_ip() { [[ -f /tmp/device.ip ]] && cat /tmp/device.ip || choose_device; }
+DEVICE_IP=$([[ -f $TMP_DEV_IP ]] && cat "$TMP_DEV_IP" || choose_device)
+get_open_ports() { nmap "$DEVICE_IP" -p 37000-44000 | awk -F"/" '/\/tcp/ {print $1}' | tee "$TMP_DEV_PORT" &>/dev/null; }
 
-print_help() {
-	cat <<EOF
-Usage: $0 [-c|--change [IP]] [-h|--help]
-  -c, --change [IP]   Change the device (optional: provide IP address)
-  -h, --help          Display this help message
-EOF
+connect_device() {
+	[[ -z "$dynamic_port" ]] && get_open_ports
+	dynamic_port=$([[ -f "$TMP_DEV_PORT" ]] && cat "$TMP_DEV_PORT" || echo '5555')
+	echo -e "Connecting to [$DEVICE_IP:$dynamic_port] via adb..."
+	adb connect "$DEVICE_IP:$dynamic_port" || echo -e "\nError: Failed to connect try updating the device port\n"
 }
 
-main() {
-	while [[ $# -gt 0 ]]; do
-		case "$1" in
-		-c | --change)
-			shift
-			[[ -n "$1" ]] && echo "$1" >/tmp/device.ip || choose_device
-			exit 0
-			;;
-		-h | --help)
-			print_help
-			;;
-		*)
-			echo "Invalid option: $1"
-			;;
-		esac
-	done
+pair_device() {
+	echo -e 'On your phone: \n\tGo to → Developer Options → Wireless Debugging \n\t→ Tap on "Pair device with pairing code"\n'
+	read -rp "All done?? (Press Enter when ready.)" # Ensure if the user is in Developer Options; pairing won't work otherwise.
 
-	DEVICE_IP=$(get_device_ip)
+	echo "Fetching available device ports..." && get_open_ports
+	if has_fzf; then
+		pairing_port=$(cat <"$TMP_DEV_PORT" | fzf --header='Select Port:' --bind 'enter:become(echo {})')
+	else
+		pairing_port=$(read -rp 'Enter port manually: ' port && echo "$port")
+	fi
 
-	dynamic_port=$(nmap "$DEVICE_IP" -p 37000-44000 | awk -F"/" '/\/tcp/ {print $1}')
-	adb_port="${dynamic_port:-5555}"
-	adb connect "$DEVICE_IP:$adb_port"
+	if [[ -n "$pairing_port" ]]; then
+		echo -e "\nPairing to [$DEVICE_IP:$pairing_port] via adb...\n"
+		adb pair "$DEVICE_IP:$pairing_port" && sleep 1
+		echo -e "Updating the device dynamic port..." && get_open_ports # execute this function to update & remove the pairing port
+	else
+		echo -e '\nError: Unable to determine the pairing port.\nTry to manually pair the device instead.\n'
+	fi
 
+}
+
+pair_device_prompt() {
+	if [[ ! -e "$HOME/.android/adbkey" ]]; then
+		read -rp 'Would you like to pair the device? (y/n): ' response
+		[[ "${response,,}" == "y" ]] && pair_device && scrcpy_cmd || echo 'Aborted.'
+	fi
+}
+
+scrcpy_cmd() {
+	connect_device
+	# TODO: make a fzf selection for this flags
 	scrcpy_flags=(
-		"--window-borderless"
+		# "--window-borderless"
 		"--turn-screen-off"
 		"--show-touches"
 		"--kill-adb-on-close"
 	)
 
 	if adb devices | grep -q "$DEVICE_IP"; then
-		scrcpy "${scrcpy_flags[@]}" || { echo "Error: scrcpy is not installed" && exit 1; }
-		# adb disconnect
+		scrcpy "${scrcpy_flags[@]}"
 	else
-		echo "Enable Wireless Debugging first and try again" && exit 1
+		echo -e "\nEnable Wireless Debugging first and try again. \nOr make sure that device are already paired\n" && pair_device_prompt
 	fi
+}
+
+print_help() {
+	cat <<EOF
+Usage: $BASE_NAME
+  -c, --change-ip [IP]        Change the device (optional: provide IP address)
+  -n, --pair                  Pair new device via adb
+  -U, --update-port           Update the device port
+  -h, --help                  Display this help message
+EOF
+}
+
+main() {
+	while [[ $# -gt 0 ]]; do
+		case "$1" in
+		-c | --change-ip) shift && [[ -n "$1" ]] && echo "$1" >"$TMP_DEV_IP" || choose_device ;;
+		-n | --pair) shift && pair_device ;;
+		-U | --update-port) shift && get_open_ports ;;
+		-h | --help) print_help && exit ;;
+		*)
+			echo "Invalid option: $1" && print_help && exit
+			;;
+		esac
+	done
+
+	scrcpy_cmd
 }
 
 main "$@"
